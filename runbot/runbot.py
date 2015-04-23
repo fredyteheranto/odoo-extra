@@ -286,10 +286,6 @@ class runbot_repo(osv.osv):
             # create build (and mark previous builds as skipped) if not found
             build_ids = Build.search(cr, uid, [('branch_id', '=', branch.id), ('name', '=', sha)])
             if not build_ids:
-                if not branch.sticky:
-                    to_be_skipped_ids = Build.search(cr, uid, [('branch_id', '=', branch.id), ('state', '=', 'pending')])
-                    Build.skip(cr, uid, to_be_skipped_ids)
-
                 _logger.debug('repo %s branch %s new build found revno %s', branch.repo_id.name, branch.name, sha)
                 build_info = {
                     'branch_id': branch.id,
@@ -301,7 +297,14 @@ class runbot_repo(osv.osv):
                     'subject': subject,
                     'date': dateutil.parser.parse(date[:19]),
                     'modules': ','.join(filter(None, [branch.repo_id.modules, branch.modules])),
+                    'sequence': min_sequence,
                 }
+
+                if not branch.sticky:
+                    to_be_skipped_ids = Build.search(cr, uid, [('branch_id', '=', branch.id), ('state', '=', 'pending')])
+                    Build.skip(cr, uid, to_be_skipped_ids)
+                    min_sequence = self.search_read(cr, uid, [('id', 'in', to_be_skipped_ids)], fields=['sequence'], order='sequence asc', limit=1, context=context)
+                    build_info['sequence'] = min_sequence[0]
                 Build.create(cr, uid, build_info)
 
         # skip old builds (if their sequence number is too low, they will not ever be built)
